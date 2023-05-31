@@ -3,6 +3,7 @@
 - Chat Completions. (Reference: https://platform.openai.com/docs/api-reference/chat)
 - Completions. (Reference: https://platform.openai.com/docs/api-reference/completions)
 - Embeddings. (Reference: https://platform.openai.com/docs/api-reference/embeddings)
+- transcriptions. (Reference: https://openai.com/blog/introducing-chatgpt-and-whisper-apis)
 
 Usage:
 python3 -m fastchat.serve.openai_api_server
@@ -25,6 +26,7 @@ from pydantic import BaseSettings
 import shortuuid
 import tiktoken
 import uvicorn
+from fastapi import UploadFile
 
 from fastchat.constants import WORKER_API_TIMEOUT, WORKER_API_EMBEDDING_BATCH_SIZE, ErrorCode
 from fastchat.model.model_adapter import get_conversation_template
@@ -52,6 +54,13 @@ from fastchat.protocol.openai_api_protocol import (
     TokenCheckResponse,
     UsageInfo,
 )
+
+# 中文asr
+from fastchat.asr_zh.ASRService import ASRService
+from fastchat.asr_zh.utils import persist_binary_file_locally, create_unique_tmp_file
+from fastchat.asr_zh.transcoding.transcoding_service import convert_file_to_readable_mp3
+asr_config_path = '../asr_zh/config.yaml'
+asr_service = ASRService(asr_config_path)
 
 logger = logging.getLogger(__name__)
 
@@ -683,6 +692,24 @@ async def get_embedding(payload: Dict[str, Any]):
         )
         embedding = response.json()
         return embedding
+
+
+def __get_transcoded_audio_file_path(data: bytes) -> str:
+    local_file_path = persist_binary_file_locally(data, file_suffix='user_audio.mp3')
+    local_output_file_path = create_unique_tmp_file(file_suffix='transcoded_user_audio.mp3')
+    convert_file_to_readable_mp3(
+        local_input_file_path=local_file_path,
+        local_output_file_path=local_output_file_path
+    )
+    return local_output_file_path
+
+
+@app.post('/v1/audio/transcriptions')
+async def audio_transcriptions(model: str, file: UploadFile):
+    file_data = await file.read()
+    generated_ai_audio_file_path = __get_transcoded_audio_file_path(file_data)
+    result = asr_service.infer(generated_ai_audio_file_path)
+    return { "text": result }
 
 
 if __name__ == "__main__":
