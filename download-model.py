@@ -141,8 +141,10 @@ def get_download_links_from_huggingface(model, branch):
             is_ggml = re.match("ggml.*\.bin", fname)
             is_tokenizer = re.match("tokenizer.*\.model", fname)
             is_text = re.match(".*\.(txt|json|py|md)", fname) or is_tokenizer
+            is_pkl = re.match(".*\.(mvn|onnx|pkl)", fname)
 
-            if any((is_pytorch, is_safetensors, is_pt, is_tokenizer, is_text)):
+
+            if any((is_pytorch, is_safetensors, is_pt, is_tokenizer, is_text, is_pkl)):
                 if 'lfs' in dict[i]:
                     sha256.append([fname, dict[i]['lfs']['oid']])
                 if is_text:

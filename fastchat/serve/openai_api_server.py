@@ -16,7 +16,7 @@ import json
 import logging
 
 import os
-from typing import Generator, Optional, Union, Dict, List, Any
+from typing import Generator, Optional, Union, Dict, List, Any, Annotated
 
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,7 +26,7 @@ from pydantic import BaseSettings
 import shortuuid
 import tiktoken
 import uvicorn
-from fastapi import UploadFile
+from fastapi import UploadFile, Form
 
 from fastchat.constants import WORKER_API_TIMEOUT, WORKER_API_EMBEDDING_BATCH_SIZE, ErrorCode
 from fastchat.model.model_adapter import get_conversation_template
@@ -705,11 +705,11 @@ def __get_transcoded_audio_file_path(data: bytes) -> str:
 
 
 @app.post('/v1/audio/transcriptions')
-async def audio_transcriptions(model: str, file: UploadFile):
+async def audio_transcriptions(model: Annotated[str, Form()], file: Annotated[UploadFile, Form()]):
     file_data = await file.read()
     generated_ai_audio_file_path = __get_transcoded_audio_file_path(file_data)
     result = asr_service.infer(generated_ai_audio_file_path)
-    return { "text": result }
+    return { "text": result}
 
 
 if __name__ == "__main__":
