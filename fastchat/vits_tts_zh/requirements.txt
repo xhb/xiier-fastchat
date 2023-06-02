@@ -1,2 +1,0 @@
-onnxruntime==1.14.1
-typeguard==2.13.3

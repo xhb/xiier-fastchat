@@ -59,17 +59,37 @@ from fastchat.protocol.openai_api_protocol import (
 from fastchat.asr_zh.ASRService import ASRService
 from fastchat.asr_zh.utils import persist_binary_file_locally, create_unique_tmp_file, get_tmp_file_locally
 from fastchat.asr_zh.transcoding.transcoding_service import convert_file_to_readable_mp3
-from fastchat.vits_tts_zh.TTService import TTService
+asr_config_path = 'fastchat/asr_zh/config.yaml'
+asr_service = ASRService(asr_config_path)
 
+# 中文tts
+from fastchat.vits_tts_zh.TTService import TTService
 voices = {
   '派蒙': ['models/xiier_vits_zh/paimon6k.json', 'models/xiier_vits_zh/paimon6k_390k.pth', 'character_paimon', 1],
   '云飞': ['models/xiier_vits_zh/yunfeimix2.json', 'models/xiier_vits_zh/yunfeimix2_53k.pth', 'character_yunfei', 1],
   '神子': ['models/xiier_vits_zh/miko.json', 'models/xiier_vits_zh/miko_139k.pth', 'character_miko', 1],
   '钟离': ['models/xiier_vits_zh/zhongli.json', 'models/xiier_vits_zh/zhongli_44k.pth', 'character_zhongli', 1],
 }
+voices_obj = {
+  '派蒙': TTService(*voices['派蒙']),
+  '云飞': TTService(*voices['云飞']),
+  '神子': TTService(*voices['神子']),
+  '钟离': TTService(*voices['钟离'])
+}
 
-asr_config_path = 'fastchat/asr_zh/config.yaml'
-asr_service = ASRService(asr_config_path)
+# 中文情感分析
+from fastchat.sentiment_cls.SentimentEngine import SentimentEngine
+
+sentiment = SentimentEngine('models/xiier_sentiment_cls/paimon_sentiment.onnx')
+sentiment_table = {
+   0: '开心',
+   1: '害怕',
+   2: '生气',
+   3: '失落',
+   4: '好奇',
+   5: '戏谑' 
+}
+
 
 logger = logging.getLogger(__name__)
 
@@ -730,10 +750,18 @@ async def tts_generate(request: Request):
     character = body["character"]
     text = body["text"]
     tmpfile = create_unique_tmp_file(file_suffix='tts_audio.mp3')
-    tts = TTService(*voices[character])
+    tts = voices_obj[character]
     tts.read_save(text, tmpfile, tts.hps.data.sampling_rate)
     return FileResponse(tmpfile, media_type='audio/mpeg', filename='ai_output')
 
+
+@app.post('/v1/sentiment/analysis')
+async def sentiment_analysis(request: Request):
+    body = await request.json()
+    text = body["text"]
+    idx = sentiment.infer(text) 
+    result = sentiment_table.get(idx, '平常')
+    return { "sentiment": result }
 
 
 if __name__ == "__main__":
