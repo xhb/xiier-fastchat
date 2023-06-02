@@ -6,13 +6,13 @@ import os
 os.environ["PYTORCH_JIT"] = "0"
 import torch
 
-sys.path.append('vits')
-import vits.commons as commons
-import vits.utils as utils
+sys.path.append('fastchat/vits_tts_zh/vits')
+import fastchat.vits_tts_zh.vits.commons as commons
+import fastchat.vits_tts_zh.vits.utils as utils
 
-from vits.models import SynthesizerTrn
-from vits.text.symbols import symbols
-from vits.text import text_to_sequence
+from fastchat.vits_tts_zh.vits.models import SynthesizerTrn
+from fastchat.vits_tts_zh.vits.text.symbols import symbols
+from fastchat.vits_tts_zh.vits.text import text_to_sequence
 
 import logging
 logging.getLogger().setLevel(logging.INFO)
