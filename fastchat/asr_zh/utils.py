@@ -32,3 +32,7 @@ def persist_binary_file_locally(data: bytes, file_suffix: str) -> str:
         f.write(data)
 
     return file_path
+
+def get_tmp_file_locally(filename) -> str:
+    file_path = os.path.join(get_tmp_folder_path(), filename)
+    return file_path

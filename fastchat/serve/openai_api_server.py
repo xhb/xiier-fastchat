@@ -20,13 +20,13 @@ from typing import Generator, Optional, Union, Dict, List, Any, Annotated
 
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 import httpx
 from pydantic import BaseSettings
 import shortuuid
 import tiktoken
 import uvicorn
-from fastapi import UploadFile, Form
+from fastapi import UploadFile, Form, Request
 
 from fastchat.constants import WORKER_API_TIMEOUT, WORKER_API_EMBEDDING_BATCH_SIZE, ErrorCode
 from fastchat.model.model_adapter import get_conversation_template
@@ -57,9 +57,18 @@ from fastchat.protocol.openai_api_protocol import (
 
 # 中文asr
 from fastchat.asr_zh.ASRService import ASRService
-from fastchat.asr_zh.utils import persist_binary_file_locally, create_unique_tmp_file
+from fastchat.asr_zh.utils import persist_binary_file_locally, create_unique_tmp_file, get_tmp_file_locally
 from fastchat.asr_zh.transcoding.transcoding_service import convert_file_to_readable_mp3
-asr_config_path = '../asr_zh/config.yaml'
+from fastchat.vits_tts_zh.TTService import TTService
+
+voices = {
+  '派蒙': ['models/xiier_vits_zh/paimon6k.json', 'models/xiier_vits_zh/paimon6k_390k.pth', 'character_paimon', 1],
+  '云飞': ['models/xiier_vits_zh/yunfeimix2.json', 'models/xiier_vits_zh/yunfeimix2_53k.pth', 'character_yunfei', 1],
+  '神子': ['models/xiier_vits_zh/miko.json', 'models/xiier_vits_zh/miko_139k.pth', 'character_miko', 1],
+  '钟离': ['models/xiier_vits_zh/zhongli.json', 'models/xiier_vits_zh/zhongli_44k.pth', 'character_zhongli', 1],
+}
+
+asr_config_path = 'fastchat/asr_zh/config.yaml'
 asr_service = ASRService(asr_config_path)
 
 logger = logging.getLogger(__name__)
@@ -694,6 +703,7 @@ async def get_embedding(payload: Dict[str, Any]):
         return embedding
 
 
+# 把音频转成mp3再去推断,但是发现没必要
 def __get_transcoded_audio_file_path(data: bytes) -> str:
     local_file_path = persist_binary_file_locally(data, file_suffix='user_audio.mp3')
     local_output_file_path = create_unique_tmp_file(file_suffix='transcoded_user_audio.mp3')
@@ -707,9 +717,23 @@ def __get_transcoded_audio_file_path(data: bytes) -> str:
 @app.post('/v1/audio/transcriptions')
 async def audio_transcriptions(model: Annotated[str, Form()], file: Annotated[UploadFile, Form()]):
     file_data = await file.read()
-    generated_ai_audio_file_path = __get_transcoded_audio_file_path(file_data)
+    generated_ai_audio_file_path = persist_binary_file_locally(file_data, file_suffix='user_audio.mp3')
     result = asr_service.infer(generated_ai_audio_file_path)
-    return { "text": result}
+    if os.path.exists(generated_ai_audio_file_path):
+        os.remove(generated_ai_audio_file_path)
+    return { "text": result }
+
+
+@app.post('/v1/tts/generate')
+async def tts_generate(request: Request):
+    body = await request.json()
+    character = body["character"]
+    text = body["text"]
+    tmpfile = create_unique_tmp_file(file_suffix='tts_audio.mp3')
+    tts = TTService(*voices[character])
+    tts.read_save(text, tmpfile, tts.hps.data.sampling_rate)
+    return FileResponse(tmpfile, media_type='audio/mpeg', filename='ai_output')
+
 
 
 if __name__ == "__main__":
